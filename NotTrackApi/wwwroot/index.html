@@ -1,0 +1,294 @@
+﻿<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NotDefterim - Giriş</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(to right, #667eea, #764ba2);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 500px;
+            width: 100%;
+            padding: 40px;
+            background: rgba(255, 255, 255, 0.82);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
+            border-radius: 20px;
+            backdrop-filter: blur(10px);
+            transition: all 0.3s ease-in-out;
+        }
+
+        h2 {
+            font-weight: 600;
+            text-align: center;
+            margin-bottom: 30px;
+            color: #2c3e50;
+        }
+
+        label.form-label {
+            font-weight: 500;
+            color: #667eea;
+        }
+
+        .btn-login {
+            background-color: #ffffff;
+            color: #3f72af;
+            border: none;
+            font-weight: 600;
+            padding: 12px 20px;
+            border-radius: 10px;
+            font-size: 16px;
+        }
+
+            .btn-login:hover {
+                background-color: #e0e0e0;
+                color: #2c5282;
+            }
+
+        .form-control {
+            border-radius: 10px;
+            padding: 12px 15px;
+            font-size: 15px;
+        }
+
+        .input-group .form-control {
+            border-top-left-radius: 10px;
+            border-bottom-left-radius: 10px;
+        }
+
+        .input-group .btn {
+            border-top-right-radius: 10px;
+            border-bottom-right-radius: 10px;
+        }
+
+        
+        .note-item {
+            position: relative;
+        }
+
+        .note-item .btn-delete {
+            position: relative;
+            top: 0;
+            right: 0;
+            margin-left: 10px;
+        }
+
+        .note-item:hover .btn-delete {
+            opacity: 1;
+            transition: 0.3s;
+        }
+
+        .btn-delete {
+            opacity: 0.8;
+            font-size: 14px;
+            padding: 4px 8px;
+            border-radius: 8px;
+        }
+    </style>
+
+    
+</head>
+<body>
+    <div class="container">
+        <h2> Not Defteri Uygulaması</h2>
+        <div id="login">
+            <div class="mb-3">
+                <label for="email" class="form-label">📧 Email</label>
+                <input type="email" id="email" class="form-control" placeholder="ornek@example.com" autocomplete="email" />
+            </div>
+            <div class="mb-3">
+                <label for="password" class="form-label">🔒 Şifre</label>
+                <div class="input-group">
+                    <input type="password" id="password" class="form-control" placeholder="Şifrenizi girin" autocomplete="current-password" />
+                    <button class="btn btn-outline-secondary" onclick="togglePassword()">Göster</button>
+                </div>
+            </div>
+            <div class="d-grid">
+                <button class="btn btn-login" onclick="login()"> Giriş Yap</button>
+            </div>
+        </div>
+
+        <div id="notes" style="display:none">
+            <h4 class="mt-4"> Notlarım</h4>
+            <div id="userInfo" class="mb-2 text-muted"></div>
+            <input type="text" id="searchBox" class="form-control" placeholder=" Notlarda ara..." onkeyup="filterNotes()" />
+            <ul id="noteList" class="mt-3"></ul>
+            <div class="mb-3">
+                <label for="title" class="form-label"> Başlık</label>
+                <input type="text" id="title" class="form-control" />
+            </div>
+            <div class="mb-3">
+                <label for="content" class="form-label"> İçerik</label>
+                <textarea id="content" class="form-control" rows="3"></textarea>
+            </div>
+            <div class="d-grid">
+                <button onclick="addNote()" class="btn btn-success">➕ Not Ekle</button>
+                <button onclick="downloadNotes('txt')" class="btn btn-secondary mt-2"> TXT </button>
+                <button onclick="downloadNotes('pdf')" class="btn btn-secondary mt-2"> PDF</button>
+                <button onclick="logout()" class="btn btn-danger mt-2"> Çıkış</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script>
+        let token = localStorage.getItem("jwt") || "";
+
+        function togglePassword() {
+            const passwordInput = document.getElementById("password");
+            passwordInput.type = passwordInput.type === "password" ? "text" : "password";
+        }
+
+        async function login() {
+            const email = document.getElementById("email").value;
+            const password = document.getElementById("password").value;
+
+            const response = await fetch("/api/Auth/login", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ email, password })
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                token = data.token;
+                localStorage.setItem("jwt", token);
+                document.getElementById("login").style.display = "none";
+                document.getElementById("notes").style.display = "block";
+                loadNotes();
+                showUserInfo();
+            } else {
+                alert(" Giriş başarısız.");
+            }
+        }
+
+        function parseJwt(token) {
+            try {
+                const payload = token.split('.')[1];
+                return JSON.parse(atob(payload));
+            } catch (e) {
+                return {};
+            }
+        }
+
+        function showUserInfo() {
+            const user = parseJwt(token);
+            const email = Array.isArray(user["email"]) ? user["email"][0] : user["email"] || "-";
+            const role = user["role"] || user["http://schemas.microsoft.com/ws/2008/06/identity/claims/role"] || "Bilinmiyor";
+            document.getElementById("userInfo").innerText = `👤 Rol: ${role} | 📧 ${email}`;
+        }
+
+        async function loadNotes() {
+            const response = await fetch("/api/Notes", {
+                headers: { "Authorization": `Bearer ${token}` }
+            });
+            const notes = await response.json();
+
+            const list = document.getElementById("noteList");
+            list.innerHTML = "";
+
+            notes.forEach(note => {
+                const li = document.createElement("li");
+                li.className = "note-item d-flex justify-content-between align-items-center bg-light p-3 mb-2 rounded shadow-sm";
+
+                const textDiv = document.createElement("div");
+                textDiv.textContent = `${note.title}: ${note.content}`;
+
+                const delBtn = document.createElement("button");
+                delBtn.textContent = "🗑️";
+                delBtn.className = "btn btn-sm btn-danger btn-delete ms-3";
+                delBtn.onclick = () => deleteNote(note.id);
+
+                li.appendChild(textDiv);
+                li.appendChild(delBtn);
+                list.appendChild(li);
+            });
+        }
+
+
+        async function addNote() {
+            const title = document.getElementById("title").value;
+            const content = document.getElementById("content").value;
+
+            const response = await fetch("/api/Notes", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${token}`
+                },
+                body: JSON.stringify({ title, content })
+            });
+
+            if (response.ok) {
+                await loadNotes();
+               
+                document.getElementById("title").value = "";
+                document.getElementById("content").value = "";
+            } else {
+                const error = await response.text();
+                alert("❌ Not eklenemedi: " + error);
+            }
+        }
+
+
+        async function deleteNote(id) {
+            const res = await fetch(`/api/Notes/${id}`, {
+                method: "DELETE",
+                headers: {
+                    "Authorization": `Bearer ${token}`
+                }
+            });
+            if (res.ok) loadNotes();
+            else alert("❌ Silinemedi. Yetki yok veya hata oluştu.");
+        }
+
+        function downloadNotes(format) {
+            const content = Array.from(document.querySelectorAll(".note-item")).map(n => n.textContent.trim()).join("\n\n");
+
+            if (format === 'txt') {
+                const blob = new Blob([content], { type: 'text/plain' });
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = "notlar.txt";
+                a.click();
+            } else if (format === 'pdf') {
+                const { jsPDF } = window.jspdf;
+                const pdf = new jsPDF();
+                pdf.text(content, 10, 10);
+                pdf.save("notlar.pdf");
+            }
+        }
+
+        function filterNotes() {
+            const query = document.getElementById("searchBox").value.toLowerCase();
+            document.querySelectorAll(".note-item").forEach(item => {
+                item.style.display = item.textContent.toLowerCase().includes(query) ? "block" : "none";
+            });
+        }
+
+        function logout() {
+            localStorage.removeItem("jwt");
+            location.reload();
+        }
+
+        window.onload = () => {
+            if (token) {
+                document.getElementById("login").style.display = "none";
+                document.getElementById("notes").style.display = "block";
+                loadNotes();
+                showUserInfo();
+            }
+        }
+    </script>
+</body>
+</html>
